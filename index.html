@@ -65,8 +65,8 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
 .clr-box input[type=color]{position:absolute;inset:-4px;width:calc(100%+8px);height:calc(100%+8px);opacity:0;cursor:pointer;border:none;padding:0;}
 .clr-fill{width:100%;height:100%;pointer-events:none;}
 .clr-row input[type=text]{flex:1;}
-.wave-styles{display:flex;gap:7px;flex-wrap:wrap;}
-.ws{flex:1;min-width:60px;padding:9px 4px;text-align:center;border:1px solid #ddd5c0;border-radius:3px;font-size:9px;font-weight:800;letter-spacing:1px;color:#5a4820;cursor:pointer;background:#fff;transition:all .15s;text-transform:uppercase;}
+.wave-styles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.ws{flex:1;min-width:50px;padding:9px 2px;text-align:center;border:1px solid #ddd5c0;border-radius:3px;font-size:8px;font-weight:800;letter-spacing:0px;color:#5a4820;cursor:pointer;background:#fff;transition:all .15s;text-transform:uppercase;}
 .ws.sel{border-color:#8b5e1a;background:#fdf4e0;color:#8b5e1a;}
 .theme-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px;}
 .chip{width:28px;height:28px;border-radius:50%;cursor:pointer;border:2px solid transparent;transition:all .15s;flex-shrink:0;}
