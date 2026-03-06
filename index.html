@@ -65,7 +65,7 @@ textarea{resize:vertical;min-height:80px;line-height:1.6;}
 .clr-box input[type=color]{position:absolute;inset:-4px;width:calc(100%+8px);height:calc(100%+8px);opacity:0;cursor:pointer;border:none;padding:0;}
 .clr-fill{width:100%;height:100%;pointer-events:none;}
 .clr-row input[type=text]{flex:1;}
-.wave-styles{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;}
+.wave-styles{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;}
 .ws{flex:1;min-width:50px;padding:9px 2px;text-align:center;border:1px solid #ddd5c0;border-radius:3px;font-size:8px;font-weight:800;letter-spacing:0px;color:#5a4820;cursor:pointer;background:#fff;transition:all .15s;text-transform:uppercase;}
 .ws.sel{border-color:#8b5e1a;background:#fdf4e0;color:#8b5e1a;}
 .theme-chips{display:flex;gap:7px;flex-wrap:wrap;margin-top:2px;}
@@ -226,11 +226,12 @@ input[type=range]{width:100%;margin-top:6px;accent-color:#8b5e1a;}
     <div class="s-item">
       <span class="s-lbl">파형 스타일</span>
       <div class="wave-styles">
-        <div class="ws" data-style="bars">▊ 막대</div>
-        <div class="ws" data-style="mirror">⬡ 미러</div>
-        <div class="ws" data-style="line">〰 라인</div>
-        <div class="ws sel" data-style="circle">◎ 원형</div>
-        <div class="ws" data-style="heart">♥ 하트</div>
+        <div class="ws sel" data-style="lotus">🪷 로터스</div>
+        <div class="ws" data-style="crystal">💎 크리스탈</div>
+        <div class="ws" data-style="heartbeat">💗 하트비트</div>
+        <div class="ws" data-style="mercury">🌊 머큐리</div>
+        <div class="ws" data-style="wing">🪽 날개</div>
+        <div class="ws" data-style="sakura">🌸 사쿠라</div>
         <div class="ws" data-style="corner">◱ 코너</div>
       </div>
     </div>
@@ -331,14 +332,8 @@ lyricsEnabled.addEventListener('change',function(){
 document.querySelectorAll('.ws').forEach(function(btn){
   btn.addEventListener('click',function(){
     document.querySelectorAll('.ws').forEach(function(b){b.classList.remove('sel');});
-    btn.classList.add('sel');waveStyle=btn.dataset.style;
-    // 코너 선택 시 워터마크 자동 우측 하단
-    if(waveStyle==='corner'){
-      logoPos='br';
-      document.querySelectorAll('.lp').forEach(function(b){b.classList.remove('sel');});
-      var brBtn=document.querySelector('.lp[data-pos="br"]');
-      if(brBtn)brBtn.classList.add('sel');
-    }
+    btn.classList.add('sel');
+    waveStyle=btn.dataset.style;
     if(mp3File)drawStaticPreview();
   });
 });
@@ -469,6 +464,256 @@ function ca(hex,a){var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),1
 function avg(arr,s,e){var sum=0;for(var i=s;i<e;i++)sum+=arr[i];return sum/(e-s);}
 function rr(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.lineTo(x+w-r,y);ctx.quadraticCurveTo(x+w,y,x+w,y+r);ctx.lineTo(x+w,y+h-r);ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);ctx.lineTo(x+r,y+h);ctx.quadraticCurveTo(x,y+h,x,y+h-r);ctx.lineTo(x,y+r);ctx.quadraticCurveTo(x,y,x+r,y);ctx.closePath();}
 
+// ══════════════════════════════════════════════════════
+// WebGL SHADER ENGINE
+// ══════════════════════════════════════════════════════
+var glCanvas=null,gl=null,glPrograms={};
+var glUniforms={time:0,bass:0,mid:0,treble:0};
+
+var VERT_SRC=`attribute vec2 a_pos;void main(){gl_Position=vec4(a_pos,0,1);}`;
+
+var SHADERS={
+  lotus:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    void main(){
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y*1.6;
+      float d=length(uv);
+      float ang=atan(uv.y,uv.x);
+      // 꽃잎 8장
+      float petals=abs(cos(ang*4.0-time*0.15));
+      float petalShape=pow(max(0.0,petals-d*1.4+0.3+bass*0.3),2.5);
+      // 동심원 맥박
+      float rings=sin(d*18.0-time*2.0+bass*10.0)*0.5+0.5;
+      float ringMask=exp(-d*2.5)*rings;
+      // 결합
+      float wave=petalShape*(1.0+mid*1.5)+ringMask*0.5;
+      // cyan↔magenta
+      vec3 cyan=vec3(0.0,0.9,1.0);
+      vec3 magenta=vec3(1.0,0.15,0.9);
+      vec3 col=mix(cyan,magenta,wave*treble+ang/6.28+0.5);
+      col*=wave*6.0*(1.0+bass*2.5);
+      // 중심 코어
+      float core=exp(-d*12.0)*(1.0+bass*2.0);
+      col+=vec3(1.0,1.0,1.0)*core*3.0;
+      float alpha=smoothstep(0.0,0.25,wave+core*0.5);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `,
+  crystal:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    float spike(vec2 uv,float bass2){
+      float d=length(uv);
+      float spikes=sin(d*22.0+time*3.5+bass2*12.0)*0.5+0.5;
+      // 중앙 집중 (아래에서 솟는 느낌)
+      float city=pow(max(0.0,1.0-d*1.1),2.2)*spikes*(1.0+treble*1.5);
+      return city;
+    }
+    void main(){
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y*1.5;
+      // 바닥면 효과 (하단 1/3)
+      float floor=smoothstep(-0.1,0.0,-uv.y-0.3+bass*0.15);
+      float w=spike(uv,bass);
+      // 레인보우 크리스탈 컬러
+      vec3 col=0.5+0.5*cos(time*0.8+w*5.0+vec3(0.0,2.1,4.2));
+      col*=w*7.0*(bass+0.4);
+      // 홀로그래픽 바닥 빛
+      vec3 floorCol=vec3(0.7,0.5,1.0)*floor*0.4*(1.0+mid);
+      col+=floorCol;
+      // 스파이크 끝 반짝임
+      float sparkle=pow(w,4.0)*treble*3.0;
+      col+=vec3(1.0,1.0,1.0)*sparkle;
+      float alpha=smoothstep(0.0,0.3,w)+floor*0.3;
+      gl_FragColor=vec4(col,alpha);
+    }
+  `,
+  heartbeat:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    void main(){
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y*2.0;
+      float d=length(uv);
+      float pulse=sin(time*1.2+bass*8.0)*0.3+0.7;
+      // 맥박 원형 링들
+      float rings=sin(d*14.0-time*2.5+bass*8.0)*pulse;
+      float roseGlow=pow(max(0.0,1.0-d*0.9),3.0)*(1.0+bass*2.0);
+      float wave=abs(rings)*roseGlow;
+      // rose↔cyan
+      vec3 rose=vec3(1.0,0.3,0.6);
+      vec3 cyan=vec3(0.0,1.0,0.9);
+      vec3 col=mix(rose,cyan,mid)*7.0*(1.0+bass*1.5);
+      col*=wave;
+      // 중심 핑크 코어
+      float core=exp(-d*8.0)*pulse*(1.0+bass*3.0);
+      col+=vec3(1.0,0.6,0.8)*core*4.0;
+      float alpha=smoothstep(0.0,0.3,wave+core*0.3);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `,
+  mercury:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    void main(){
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y*1.5;
+      // 수평 흐르는 리본 (3레이어)
+      float ribbon=0.0;
+      for(float i=0.0;i<3.0;i++){
+        float yOff=i*0.08-0.08;
+        float wave=sin(uv.x*8.0+time*(2.5+i*0.5)+bass*(6.0+i))*(1.0-length(uv)*0.5);
+        float layer=exp(-abs(uv.y-yOff-wave*0.25)*12.0*(1.0+i*0.3));
+        ribbon+=layer*(1.0-i*0.25);
+      }
+      // 크롬 홀로그래픽 컬러
+      float chroma=uv.x*0.5+0.5+time*0.1;
+      vec3 chrome=vec3(0.6+0.4*cos(chroma*6.28),0.9+0.1*sin(chroma*6.28+2.1),1.0);
+      chrome+=vec3(0.4,0.3,0.8)*mid;
+      vec3 col=pow(chrome,vec3(1.5))*ribbon*7.0;
+      // 중앙 크롬 라인 글로우
+      float centerLine=exp(-abs(uv.y)*20.0)*(0.5+bass*0.5);
+      col+=vec3(0.8,0.95,1.0)*centerLine*2.0;
+      float alpha=smoothstep(0.0,0.2,ribbon+centerLine*0.3);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `,
+  wing:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    void main(){
+      // 날개 뿌리: 우측 중앙
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y;
+      vec2 origin=vec2(0.25,0.0); // 우측 오프셋
+      vec2 p=uv-origin;
+      float d=length(p);
+      float ang=atan(p.y,p.x); // -PI ~ PI
+      // 날개 형태: 좌상단 방향으로 펼쳐짐
+      float wingAng=ang+0.8; // 왼쪽 위 방향
+      float feathers=14.0;
+      float featherPattern=abs(cos(wingAng*feathers*0.5-time*0.3))*0.5+0.5;
+      // 날개 범위 마스킹 (좌상단 섹터)
+      float wingMask=smoothstep(0.1,0.4,ang+2.5)*smoothstep(-0.1,0.3,-(ang-1.5));
+      wingMask*=smoothstep(0.8,0.0,d); // 거리 감쇠
+      // 깃털 패턴
+      float wave=sin(d*12.0-time*1.5+treble*4.0)*(1.0+bass*2.0);
+      float featherGlow=featherPattern*wingMask*(0.5+abs(wave)*0.5);
+      // 골드↔화이트
+      float goldMix=mid;
+      vec3 gold=vec3(1.0,0.9,0.55);
+      vec3 white=vec3(0.95,1.0,1.0);
+      vec3 col=mix(gold,white,goldMix)*7.0*(1.0+bass*1.5);
+      col*=featherGlow;
+      // 날개 뿌리 글로우
+      float rootGlow=exp(-d*8.0)*(1.0+bass*3.0)*wingMask;
+      col+=vec3(1.0,0.95,0.6)*rootGlow*4.0;
+      float alpha=smoothstep(0.0,0.35,featherGlow+rootGlow*0.3);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `,
+  sakura:`
+    precision mediump float;
+    uniform vec2 resolution;uniform float time;uniform float bass;uniform float mid;uniform float treble;
+    // 간단한 해시
+    float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5);}
+    void main(){
+      vec2 uv=(gl_FragCoord.xy-resolution*0.5)/resolution.y*1.7;
+      // 흐르는 벚꽃 리본 웨이브
+      float x=uv.x;
+      float ribbon=0.0;
+      for(float i=0.0;i<3.0;i++){
+        float yOff=i*0.05;
+        float wv=sin(x*3.14*3.0-time*2.2+bass*7.0)*0.5+0.5;
+        float petalBulge=pow(max(0.0,1.0-(x*x)*0.5),3.0)*wv;
+        float ribbonY=(petalBulge*0.3+wv*0.2)*1.0;
+        float layer=exp(-abs(uv.y+yOff+ribbonY)*10.0*(1.0+i*0.3));
+        ribbon+=layer*(1.0-i*0.2);
+      }
+      // 떠다니는 꽃잎 파티클
+      float petals=0.0;
+      for(float i=0.0;i<20.0;i++){
+        vec2 seed=vec2(i*0.1,floor(i*0.37));
+        vec2 pos=vec2(
+          fract(hash(seed)*1.0+time*(0.02+hash(seed+1.0)*0.03))-0.5,
+          hash(seed+2.0)*1.2-0.6-sin(time*0.6+i)*0.05
+        );
+        float dist=length(uv-pos*1.7);
+        petals+=exp(-dist*dist*60.0)*(0.5+bass*0.5);
+      }
+      // 핑크↔화이트
+      float pinkMix=mid;
+      vec3 pink=vec3(1.0,0.4,0.7);
+      vec3 pw=vec3(0.95,0.9,1.0);
+      vec3 col=mix(pink,pw,pinkMix)*7.0;
+      col*=(ribbon+petals*0.8);
+      // 리본 위 글로우
+      float glow=ribbon*ribbon*(0.5+bass*0.5);
+      col+=vec3(1.0,0.85,0.95)*glow*2.0;
+      float alpha=smoothstep(0.0,0.25,ribbon*0.7+petals*0.5);
+      gl_FragColor=vec4(col,alpha);
+    }
+  `
+};
+
+function initGL(W,H){
+  if(!glCanvas){
+    glCanvas=document.createElement('canvas');
+  }
+  glCanvas.width=W;glCanvas.height=H;
+  if(!gl){
+    gl=glCanvas.getContext('webgl',{premultipliedAlpha:false,alpha:true});
+    if(!gl)return false;
+  }
+  return true;
+}
+
+function getOrBuildProgram(style){
+  if(glPrograms[style])return glPrograms[style];
+  var fragSrc=SHADERS[style];
+  if(!fragSrc)return null;
+  function makeShader(type,src){
+    var s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);
+    if(!gl.getShaderParameter(s,gl.COMPILE_STATUS)){console.error(gl.getShaderInfoLog(s));return null;}
+    return s;
+  }
+  var vs=makeShader(gl.VERTEX_SHADER,VERT_SRC);
+  var fs=makeShader(gl.FRAGMENT_SHADER,'precision mediump float;\n'+fragSrc.trim());
+  if(!vs||!fs)return null;
+  var prog=gl.createProgram();gl.attachShader(prog,vs);gl.attachShader(prog,fs);gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS)){console.error(gl.getProgramInfoLog(prog));return null;}
+  // fullscreen quad
+  var buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);
+  gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  glPrograms[style]={prog:prog,buf:buf};
+  return glPrograms[style];
+}
+
+function drawGLShader(ctx,W,H,data,t,style){
+  if(!initGL(W,H))return;
+  var p=getOrBuildProgram(style);
+  if(!p)return;
+  gl.viewport(0,0,W,H);
+  gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);
+  gl.useProgram(p.prog);
+  var posLoc=gl.getAttribLocation(p.prog,'a_pos');
+  gl.bindBuffer(gl.ARRAY_BUFFER,p.buf);
+  gl.enableVertexAttribArray(posLoc);gl.vertexAttribPointer(posLoc,2,gl.FLOAT,false,0,0);
+  // uniforms
+  var setF=function(n,v){var loc=gl.getUniformLocation(p.prog,n);if(loc!==null)gl.uniform1f(loc,v);};
+  var setV=function(n,x,y){var loc=gl.getUniformLocation(p.prog,n);if(loc!==null)gl.uniform2f(loc,x,y);};
+  setV('resolution',W,H);
+  setF('time',t);
+  var bass=0,mid=0,treble=0,n=data.length;
+  for(var i=0;i<8;i++)bass+=data[i];bass/=8*255;
+  for(var i=8;i<64;i++)mid+=data[i];mid/=56*255;
+  for(var i=64;i<128;i++)treble+=data[i];treble/=64*255;
+  setF('bass',bass);setF('mid',mid);setF('treble',treble);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  // WebGL → 2D canvas로 복사
+  ctx.globalCompositeOperation='source-over';
+  ctx.drawImage(glCanvas,0,0,W,H);
+}
+// ══════════════════════════════════════════════════════
+
 function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,logo,logoSizePct,lpos,lyrics,elapsed,lyricColor,ghue){
   var T=THEMES[theme]||THEMES.cyan;
   if(bgImage){
@@ -489,12 +734,12 @@ function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,log
   vig.addColorStop(0,'rgba(0,0,0,0)');vig.addColorStop(1,'rgba(0,0,0,0.68)');
   ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
 
-  if(style==='circle')drawCircleViz(ctx,W,H,data,T,t);
-  else if(style==='bars')drawBars(ctx,W,H,data,T,t);
-  else if(style==='mirror')drawMirror(ctx,W,H,data,T,t);
-  else if(style==='line')drawLine(ctx,W,H,data,T,t);
-  else if(style==='heart')drawHeart(ctx,W,H,data,T,t);
-  else if(style==='corner')drawCorner(ctx,W,H,data,T,t);
+  var glStyles=['lotus','crystal','heartbeat','mercury','wing','sakura'];
+  if(glStyles.indexOf(style)>=0){
+    drawGLShader(ctx,W,H,data,t,style);
+  } else if(style==='corner'){
+    drawCorner(ctx,W,H,data,T,t);
+  }
 
   drawText(ctx,W,H,title,artist,T,style);
   drawTimer(ctx,W,H,elapsed,T);
@@ -502,114 +747,435 @@ function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,log
   if(logo)drawLogo(ctx,W,H,logo,logoSizePct,lpos);
 }
 
-function drawCircleViz(ctx,W,H,data,T,t){
-  var cx=W/2,cy=H/2,baseR=Math.min(W,H)*0.21,n=data.length;
+// ── 1. DREAMY LOTUS ──────────────────────────────────
+// ── 1. DREAMY LOTUS ── 연꽃 윤곽선 (cyan↔magenta)
+function drawLotus(ctx,W,H,data,T,t){
+  var cx=W/2,cy=H/2+H*0.05;
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
   ctx.save();
-  for(var r=0;r<3;r++){
-    var ringR=baseR*(1.52+r*0.22);
-    var hue=(t*60+r*120)%360;
-    var lw=Math.max(1.5,(3.5-r)*2.2*(W/1280));
+
+  // --- 꽃잎 8장 (레이어별로 크기 다르게)
+  var petalLayers=[
+    {count:6, rX:0.28, rY:0.38, rot:0,    alpha:0.55},
+    {count:6, rX:0.22, rY:0.30, rot:0.52, alpha:0.65},
+    {count:4, rX:0.16, rY:0.22, rot:0.39, alpha:0.75},
+  ];
+  petalLayers.forEach(function(layer){
+    for(var p=0;p<layer.count;p++){
+      var pang=p*(Math.PI*2/layer.count)+layer.rot+t*0.15;
+      var pulse=1+bass*0.18+Math.sin(t*1.2+p)*0.04;
+      var rx=Math.min(W,H)*layer.rX*pulse;
+      var ry=Math.min(W,H)*layer.rY*pulse;
+      var v=data[Math.floor(p*data.length/layer.count)]/255;
+      // petal tip
+      var tipX=cx+Math.cos(pang)*ry;
+      var tipY=cy+Math.sin(pang)*ry;
+      // control points (bezier)
+      var c1x=cx+Math.cos(pang-0.55)*rx;
+      var c1y=cy+Math.sin(pang-0.55)*rx;
+      var c2x=cx+Math.cos(pang+0.55)*rx;
+      var c2y=cy+Math.sin(pang+0.55)*rx;
+      // color: cyan→magenta
+      var hue=(190+treble*140+p*(30/layer.count))%360;
+      var bright=60+v*30;
+      ctx.beginPath();
+      ctx.moveTo(cx,cy);
+      ctx.bezierCurveTo(c1x,c1y,tipX,tipY,c2x,c2y);
+      ctx.bezierCurveTo(c2x,c2y,tipX,tipY,cx,cy);
+      ctx.strokeStyle='hsl('+hue+',100%,'+bright+'%)';
+      ctx.lineWidth=Math.max(0.8,(2.5-layer.rX*4)*(W/1280));
+      ctx.shadowColor='hsl('+hue+',100%,75%)';
+      ctx.shadowBlur=(12+v*15)*(W/1280);
+      ctx.globalAlpha=layer.alpha*(0.5+v*0.5);
+      ctx.stroke();ctx.shadowBlur=0;
+      // fill subtle
+      ctx.fillStyle='hsla('+hue+',100%,'+bright+'%,'+(0.03+v*0.06)+')';
+      ctx.globalAlpha=1;ctx.fill();
+    }
+  });
+
+  // --- 동심원 맥박
+  for(var r=0;r<6;r++){
+    var rv=data[Math.floor(r*data.length/6)]/255;
+    var ringR=Math.min(W,H)*(0.04+r*0.055+rv*0.03+bass*0.04);
+    var hue2=(190+r*25+t*20)%360;
     ctx.beginPath();ctx.arc(cx,cy,ringR,0,Math.PI*2);
-    ctx.strokeStyle=hsl(hue,100,75);ctx.lineWidth=lw;
-    ctx.shadowColor=hsl(hue,100,80);ctx.shadowBlur=12*(W/1280);
-    ctx.globalAlpha=0.72-r*0.12;ctx.stroke();ctx.shadowBlur=0;
+    ctx.strokeStyle='hsl('+hue2+',100%,70%)';
+    ctx.lineWidth=Math.max(0.5,1.2*(W/1280));
+    ctx.shadowColor='hsl('+hue2+',100%,80%)';ctx.shadowBlur=8*(W/1280);
+    ctx.globalAlpha=0.25+rv*0.35;ctx.stroke();ctx.shadowBlur=0;
   }
   ctx.globalAlpha=1;
-  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255;
-  var energy=bass*0.6+mid*0.3;
-  var hMain=(t*45)%360,ringColor=hsl(hMain,100,62);
-  var pd=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*(1+energy*0.35)*1.2);
-  pd.addColorStop(0,T.glow+'0.18)');pd.addColorStop(1,T.glow+'0)');
-  ctx.fillStyle=pd;ctx.beginPath();ctx.arc(cx,cy,baseR*(1+energy*0.35)*1.2,0,Math.PI*2);ctx.fill();
-  ctx.beginPath();ctx.arc(cx,cy,baseR*1.12,0,Math.PI*2);
-  ctx.strokeStyle=ringColor;ctx.lineWidth=2*(W/1280);
-  ctx.shadowColor=hsl(hMain,100,75);ctx.shadowBlur=18*(W/1280);
-  ctx.globalAlpha=0.7;ctx.stroke();ctx.shadowBlur=0;ctx.globalAlpha=1;
-  ctx.beginPath();ctx.arc(cx,cy,baseR*0.88,0,Math.PI*2);
-  ctx.strokeStyle=hsl((hMain+180)%360,100,65);ctx.lineWidth=1.2*(W/1280);
-  ctx.globalAlpha=0.5;ctx.stroke();ctx.globalAlpha=1;
-  for(var i=0;i<64;i++){
-    var ang=(i/64)*Math.PI*2+t*0.4;
-    ctx.beginPath();ctx.arc(cx+Math.cos(ang)*baseR*1.32,cy+Math.sin(ang)*baseR*1.32,1.8*(W/1280),0,Math.PI*2);
-    ctx.fillStyle=hsl((hMain+i*(360/64))%360,100,70);ctx.globalAlpha=0.55;ctx.fill();
-  }
-  ctx.globalAlpha=1;
-  for(var i=0;i<n;i++){
-    var ang2=(i/n)*Math.PI*2-Math.PI/2,v=data[i]/255;
-    var col=hsl((hMain+(i/n)*160)%360,100,60+v*30);
-    ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(ang2)*baseR*0.85,cy+Math.sin(ang2)*baseR*0.85);
-    ctx.lineTo(cx+Math.cos(ang2)*(baseR*0.85-v*baseR*0.78),cy+Math.sin(ang2)*(baseR*0.85-v*baseR*0.78));
-    ctx.strokeStyle=col;ctx.lineWidth=Math.max(1,2*(W/1280));
-    ctx.shadowColor=col;ctx.shadowBlur=v*12*(W/1280);ctx.globalAlpha=0.55+v*0.4;ctx.stroke();
-  }
-  ctx.shadowBlur=0;ctx.globalAlpha=1;
-  for(var i=0;i<n;i++){
-    var ang3=(i/n)*Math.PI*2-Math.PI/2,v2=data[i]/255;
-    var col2=hsl((hMain+30+(i/n)*200)%360,100,55+v2*35);
-    ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(ang3)*baseR*1.12,cy+Math.sin(ang3)*baseR*1.12);
-    ctx.lineTo(cx+Math.cos(ang3)*(baseR*1.12+v2*baseR*0.55),cy+Math.sin(ang3)*(baseR*1.12+v2*baseR*0.55));
-    ctx.strokeStyle=col2;ctx.lineWidth=Math.max(1,1.8*(W/1280));
-    ctx.shadowColor=col2;ctx.shadowBlur=v2*14*(W/1280);ctx.globalAlpha=0.6+v2*0.35;ctx.stroke();
-  }
-  ctx.shadowBlur=0;ctx.globalAlpha=1;
-  var coreR=baseR*0.28*(0.9+energy*0.25);
-  var cg=ctx.createRadialGradient(cx,cy,0,cx,cy,coreR);
-  cg.addColorStop(0,T.glow+'0.55)');cg.addColorStop(1,T.glow+'0)');
-  ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cx,cy,coreR,0,Math.PI*2);ctx.fill();
-  for(var c=0;c<4;c++){
-    var cang=t*0.8+c*Math.PI/2;
-    ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(cang)*baseR*0.25,cy+Math.sin(cang)*baseR*0.25);
-    ctx.lineTo(cx+Math.cos(cang)*baseR*0.6,cy+Math.sin(cang)*baseR*0.6);
-    ctx.strokeStyle=ringColor;ctx.lineWidth=1*(W/1280);ctx.globalAlpha=0.25;ctx.stroke();
-  }
-  ctx.globalAlpha=1;ctx.restore();
-}
 
-function drawBars(ctx,W,H,data,T,t){
-  var n=Math.min(data.length,100),gap=W/n,barW=gap*0.65,zoneH=H*0.4,hBase=(t*50)%360;
-  ctx.save();
-  for(var i=0;i<n;i++){
-    var v=data[i]/255,bh=Math.max(3,v*zoneH),x=i*gap+(gap-barW)/2;
-    var col=hsl((hBase+i*(180/n))%360,100,55+v*30);
-    var gr=ctx.createLinearGradient(0,H/2-bh/2,0,H/2+bh/2);
-    gr.addColorStop(0,ca(col,0.2));gr.addColorStop(0.5,col);gr.addColorStop(1,ca(col,0.2));
-    ctx.fillStyle=gr;ctx.shadowColor=col;ctx.shadowBlur=v*12*(W/1280);
-    rr(ctx,x,H/2-bh/2,barW,bh,2);ctx.fill();
-  }
+  // --- 중심 코어
+  var cg=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.min(W,H)*(0.06+bass*0.05));
+  cg.addColorStop(0,'rgba(255,255,255,'+(0.8+bass*0.2)+')');
+  cg.addColorStop(0.4,'rgba(0,220,255,0.5)');
+  cg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=cg;ctx.shadowColor='#00ffee';ctx.shadowBlur=40*(W/1280);
+  ctx.beginPath();ctx.arc(cx,cy,Math.min(W,H)*(0.06+bass*0.05),0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;ctx.restore();
 }
 
-function drawMirror(ctx,W,H,data,T,t){
-  var n=Math.min(data.length,100),gap=W/n,barW=gap*0.6,zoneH=H*0.2,hBase=(t*50)%360;
+// ── 2. CRYSTAL SPIKES ── 바닥에서 솟는 크리스탈 도시
+function drawCrystal(ctx,W,H,data,T,t){
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
   ctx.save();
-  for(var i=0;i<n;i++){
-    var v=data[i]/255,bh=Math.max(2,v*zoneH),x=i*gap+(gap-barW)/2;
-    var col=hsl((hBase+i*(200/n))%360,100,55+v*30);
-    var gr=ctx.createLinearGradient(0,H/2-bh,0,H/2+bh);
-    gr.addColorStop(0,ca(col,0.15));gr.addColorStop(0.5,col);gr.addColorStop(1,ca(col,0.15));
-    ctx.fillStyle=gr;ctx.shadowColor=col;ctx.shadowBlur=v*10*(W/1280);
-    rr(ctx,x,H/2-bh,barW,bh,2);ctx.fill();
-    rr(ctx,x,H/2,barW,bh,2);ctx.fill();
+
+  // --- 홀로그래픽 바닥면
+  var floorY=H*0.72;
+  var floorGr=ctx.createLinearGradient(0,floorY-H*0.08,0,H);
+  floorGr.addColorStop(0,'rgba(180,120,255,0)');
+  floorGr.addColorStop(0.3,'rgba(180,120,255,0.18)');
+  floorGr.addColorStop(0.6,'rgba(100,200,255,0.22)');
+  floorGr.addColorStop(1,'rgba(255,100,200,0.12)');
+  ctx.fillStyle=floorGr;ctx.fillRect(0,floorY-H*0.08,W,H-(floorY-H*0.08));
+
+  // 바닥 빛 줄기
+  for(var f=0;f<8;f++){
+    var fx=W*(0.1+f*0.12+Math.sin(t*0.4+f)*0.03);
+    var fgr=ctx.createLinearGradient(fx,floorY,fx+W*0.06,H);
+    fgr.addColorStop(0,'rgba(200,180,255,0.15)');
+    fgr.addColorStop(1,'rgba(200,180,255,0)');
+    ctx.fillStyle=fgr;ctx.globalAlpha=0.6+mid*0.3;
+    ctx.beginPath();ctx.moveTo(fx,floorY);ctx.lineTo(fx+W*0.06,H);ctx.lineTo(fx-W*0.02,H);ctx.closePath();ctx.fill();
   }
+  ctx.globalAlpha=1;
+
+  // --- 크리스탈 스파이크 (중앙 집중형, 높이 차이 극적)
+  var n=48;
+  var cx=W/2;
+  for(var i=0;i<n;i++){
+    var t2=(i/n)*2-1; // -1 ~ 1
+    var x=cx+t2*W*0.45;
+    var v=data[Math.floor(Math.abs(t2)*(data.length*0.5))]/255;
+    // 중앙일수록 더 높게
+    var centerBoost=Math.pow(1-Math.abs(t2),2.5);
+    var spikeH=Math.max(8,(v*0.6+centerBoost*0.5+bass*0.3)*H*0.65);
+    var spikeW=Math.max(3,(8-Math.abs(t2)*6)*(W/1280));
+    var hue=(280+i*(120/n)+t*15)%360;
+    var col='hsl('+hue+',100%,'+(65+v*25)+'%)';
+    var col2='hsl('+((hue+40)%360)+',100%,92%)';
+
+    // 스파이크 몸체
+    var sgr=ctx.createLinearGradient(x,floorY-spikeH,x,floorY);
+    sgr.addColorStop(0,col2);
+    sgr.addColorStop(0.15,col);
+    sgr.addColorStop(0.7,'hsla('+hue+',100%,55%,0.6)');
+    sgr.addColorStop(1,'hsla('+hue+',100%,40%,0.1)');
+
+    ctx.save();ctx.translate(x,floorY);
+    ctx.beginPath();
+    ctx.moveTo(-spikeW*0.5,0);
+    ctx.lineTo(0,-spikeH);
+    ctx.lineTo(spikeW*0.5,0);
+    ctx.closePath();
+    ctx.fillStyle=sgr;
+    ctx.shadowColor=col;ctx.shadowBlur=(10+v*25)*(W/1280);
+    ctx.globalAlpha=0.75+v*0.25;ctx.fill();
+
+    // 작은 스파이크들 (양옆에)
+    if(v>0.3){
+      var sh=spikeH*0.4;
+      ctx.beginPath();ctx.moveTo(-spikeW,0);ctx.lineTo(-spikeW*0.5,-sh);ctx.lineTo(0,0);ctx.closePath();
+      ctx.fillStyle='hsla('+hue+',100%,75%,0.5)';ctx.fill();
+      ctx.beginPath();ctx.moveTo(spikeW,0);ctx.lineTo(spikeW*0.5,-sh);ctx.lineTo(0,0);ctx.closePath();
+      ctx.fill();
+    }
+    ctx.shadowBlur=0;ctx.restore();
+  }
+
+  // --- 글로우 반사 (바닥)
+  for(var i=0;i<n;i++){
+    var t3=(i/n)*2-1;
+    var x2=cx+t3*W*0.45;
+    var v2=data[Math.floor(Math.abs(t3)*(data.length*0.5))]/255;
+    var refH=Math.max(4,v2*H*0.12);
+    var hue2=(280+i*(120/n)+t*15)%360;
+    var rgr=ctx.createLinearGradient(x2,floorY,x2,floorY+refH);
+    rgr.addColorStop(0,'hsla('+hue2+',100%,65%,0.3)');
+    rgr.addColorStop(1,'hsla('+hue2+',100%,65%,0)');
+    ctx.fillStyle=rgr;ctx.globalAlpha=0.5;
+    var sw2=Math.max(3,(8-Math.abs(t3)*6)*(W/1280));
+    ctx.fillRect(x2-sw2*0.5,floorY,sw2,refH);
+  }
+  ctx.globalAlpha=1;ctx.shadowBlur=0;ctx.restore();
+}
+
+// ── 3. VELVET HEARTBEAT ── 로즈골드 맥박 원형
+function drawHeartbeat(ctx,W,H,data,T,t){
+  var cx=W/2,cy=H/2;
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
+  var pulse=Math.sin(t*1.2+bass*8)*0.3+0.7;
+  ctx.save();
+
+  // --- 레이어별 파형 원형 링
+  for(var L=0;L<12;L++){
+    var li=L/12;
+    var rv=data[Math.floor(li*data.length)]/255;
+    var baseR=Math.min(W,H)*(0.04+li*0.42)*pulse;
+    var n=128;
+    ctx.beginPath();
+    for(var i=0;i<=n;i++){
+      var ang=(i/n)*Math.PI*2;
+      var v=data[Math.floor(i*data.length/n)]/255;
+      var wv=Math.sin(li*8-t*2+bass*8)*pulse;
+      var r=baseR+v*Math.min(W,H)*0.045+wv*Math.min(W,H)*0.025;
+      if(i===0)ctx.moveTo(cx+Math.cos(ang)*r,cy+Math.sin(ang)*r);
+      else ctx.lineTo(cx+Math.cos(ang)*r,cy+Math.sin(ang)*r);
+    }
+    ctx.closePath();
+    var roseMix=mid;
+    var rr2=Math.round(255*(1-roseMix)+0*roseMix);
+    var rg2=Math.round(77*(1-roseMix)+255*roseMix);
+    var rb2=Math.round(153*(1-roseMix)+230*roseMix);
+    ctx.strokeStyle='rgba('+rr2+','+rg2+','+rb2+','+(0.5*(1-li*0.6)+rv*0.3)+')';
+    ctx.lineWidth=Math.max(0.5,(3.5-L*0.22)*(W/1280));
+    ctx.shadowColor='rgba('+rr2+','+rg2+','+rb2+',0.9)';
+    ctx.shadowBlur=(14-L)*(rv+0.2)*(W/1280);
+    ctx.stroke();ctx.shadowBlur=0;
+  }
+
+  // --- 중심 코어
+  var bg=ctx.createRadialGradient(cx,cy,0,cx,cy,Math.min(W,H)*(0.1+bass*0.08)*pulse);
+  bg.addColorStop(0,'rgba(255,180,210,'+(0.8+bass*0.2)+')');
+  bg.addColorStop(0.4,'rgba(255,60,120,0.35)');
+  bg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=bg;ctx.shadowColor='#ff4488';ctx.shadowBlur=50*(W/1280);
+  ctx.beginPath();ctx.arc(cx,cy,Math.min(W,H)*(0.1+bass*0.08)*pulse,0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0;ctx.restore();
 }
 
-function drawLine(ctx,W,H,data,T,t){
-  var n=data.length,lineH=(t*40)%360;
-  ctx.save();ctx.beginPath();
-  for(var i=0;i<n;i++){
-    var x=(i/n)*W,y=H/2+(data[i]/255-0.5)*H*0.35;
-    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+// ── 4. LIQUID MERCURY ── 흐르는 실크 리본 (수평)
+function drawMercury(ctx,W,H,data,T,t){
+  var cy=H/2;
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
+  ctx.save();
+
+  // --- 3개 리본 레이어 (위치 살짝 다르게)
+  var ribbons=[
+    {yOff:0,     colorA:[0,180,255],  colorB:[255,80,200],  amp:0.38, thick:3.5},
+    {yOff:-H*0.06, colorA:[255,120,180],colorB:[80,220,255], amp:0.28, thick:2.2},
+    {yOff:H*0.06, colorA:[120,80,255], colorB:[0,255,200],   amp:0.22, thick:1.6},
+  ];
+  var n=200;
+
+  ribbons.forEach(function(rib, ri){
+    var pts=[];
+    for(var i=0;i<=n;i++){
+      var x=(i/n)*W;
+      var v=data[Math.floor(i*data.length/n)]/255;
+      var wave=Math.sin(v*12+t*2.5+bass*6)*(1-v*0.3);
+      var y=cy+rib.yOff+wave*H*rib.amp*0.5-v*H*rib.amp*0.5;
+      pts.push([x,y]);
+    }
+
+    // fill area
+    ctx.beginPath();
+    pts.forEach(function(p,i){i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);});
+    ctx.lineTo(W,cy+rib.yOff);ctx.lineTo(0,cy+rib.yOff);ctx.closePath();
+    var ca2=rib.colorA,cb2=rib.colorB;
+    var fillGr=ctx.createLinearGradient(0,0,W,0);
+    fillGr.addColorStop(0,'rgba('+ca2[0]+','+ca2[1]+','+ca2[2]+',0.08)');
+    fillGr.addColorStop(0.5,'rgba('+cb2[0]+','+cb2[1]+','+cb2[2]+',0.18)');
+    fillGr.addColorStop(1,'rgba('+ca2[0]+','+ca2[1]+','+ca2[2]+',0.08)');
+    ctx.fillStyle=fillGr;ctx.globalAlpha=0.8-ri*0.15;ctx.fill();
+
+    // upper ribbon line (main glow)
+    ctx.beginPath();
+    pts.forEach(function(p,i){i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);});
+    var hue=(t*30+ri*60)%360;
+    ctx.strokeStyle='hsl('+hue+',90%,80%)';
+    ctx.lineWidth=Math.max(1,rib.thick*(W/1280));
+    ctx.shadowColor='hsl('+hue+',100%,90%)';ctx.shadowBlur=(18-ri*4)*(W/1280);
+    ctx.lineJoin='round';ctx.globalAlpha=0.9-ri*0.15;ctx.stroke();ctx.shadowBlur=0;
+
+    // lower mirror ribbon
+    ctx.beginPath();
+    pts.forEach(function(p,i){
+      var y2=cy+rib.yOff-(p[1]-(cy+rib.yOff));
+      i===0?ctx.moveTo(p[0],y2):ctx.lineTo(p[0],y2);
+    });
+    var hue2=(hue+180)%360;
+    ctx.strokeStyle='hsl('+hue2+',90%,80%)';
+    ctx.lineWidth=Math.max(0.8,rib.thick*0.7*(W/1280));
+    ctx.shadowColor='hsl('+hue2+',100%,90%)';ctx.shadowBlur=(14-ri*3)*(W/1280);
+    ctx.globalAlpha=0.6-ri*0.1;ctx.stroke();ctx.shadowBlur=0;
+  });
+
+  // --- 중앙 크롬 라인
+  var ml=ctx.createLinearGradient(0,0,W,0);
+  ml.addColorStop(0,'rgba(0,0,0,0)');ml.addColorStop(0.5,'rgba(210,240,255,'+(0.5+bass*0.4)+')');ml.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.strokeStyle=ml;ctx.lineWidth=2*(W/1280);ctx.shadowColor='#d0f0ff';ctx.shadowBlur=20*(W/1280);
+  ctx.globalAlpha=0.8;ctx.beginPath();ctx.moveTo(0,cy);ctx.lineTo(W,cy);ctx.stroke();
+  ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.restore();
+}
+
+// ── 5. ANGEL WING ── 한쪽 비대칭 천사 날개
+function drawWing(ctx,W,H,data,T,t){
+  var ox=W*0.58,oy=H*0.5; // 날개 뿌리 (우측 중앙)
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
+  ctx.save();
+
+  var feathers=14;
+  var n=80;
+
+  // --- 날개 깃털들 (중심에서 좌상단 방향으로 펼쳐짐)
+  for(var f=0;f<feathers;f++){
+    var fi=f/feathers;
+    // 각 깃털의 기본 각도 (아래에서 위로 펼쳐짐)
+    var baseAng=-Math.PI*0.08-fi*Math.PI*0.72;
+    var featherLen=Math.min(W,H)*(0.55-fi*0.18+bass*0.08);
+    var v=data[Math.floor(fi*data.length)]/255;
+    var sway=Math.sin(t*0.8+f*0.4)*0.04*(1-fi*0.3);
+    var ang=baseAng+sway;
+
+    // 깃털 곡선 포인트들
+    var pts=[];
+    for(var i=0;i<=n;i++){
+      var progress=i/n;
+      // 깃털이 끝으로 갈수록 위로 휘어짐
+      var curl=-progress*progress*0.3+Math.sin(t*0.5+f*0.3)*0.04;
+      var actualAng=ang+curl;
+      var r=featherLen*progress;
+      var wv=data[Math.floor(progress*data.length)]/255;
+      var sideDisp=Math.sin(progress*Math.PI)*Math.min(W,H)*(0.015+wv*0.012);
+      var px=ox+Math.cos(actualAng)*r;
+      var py=oy+Math.sin(actualAng)*r;
+      // 깃털 너비방향 오프셋
+      var perpAng=actualAng+Math.PI/2;
+      pts.push([px+Math.cos(perpAng)*sideDisp*0.5, py+Math.sin(perpAng)*sideDisp*0.5]);
+    }
+
+    // 깃털 그리기
+    var alpha=0.55+v*0.3-fi*0.02;
+    var lw=Math.max(0.5,(3.5-fi*0.18)*(W/1280)*(0.6+v*0.5));
+    var goldMix=mid;
+    var gr2=Math.round(255*(1-goldMix)+255*goldMix);
+    var gg2=Math.round(255*(1-goldMix)+220*goldMix);
+    var gb2=Math.round(255*(1-goldMix)+140*goldMix);
+    ctx.beginPath();
+    pts.forEach(function(p,i){i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);});
+    ctx.strokeStyle='rgba('+gr2+','+gg2+','+gb2+','+alpha+')';
+    ctx.lineWidth=lw;
+    ctx.shadowColor='rgba(255,240,180,0.9)';ctx.shadowBlur=(12-fi*0.5)*(W/1280);
+    ctx.lineJoin='round';ctx.stroke();ctx.shadowBlur=0;
+
+    // 깃털 안쪽 세선
+    if(f<10){
+      for(var sub=1;sub<=3;sub++){
+        ctx.beginPath();
+        pts.forEach(function(p,i){
+          var subAng=ang-sub*0.04;
+          var r2=featherLen*(i/n)*0.9;
+          var sx=ox+Math.cos(subAng)*r2;
+          var sy=oy+Math.sin(subAng)*r2;
+          i===0?ctx.moveTo(sx,sy):ctx.lineTo(sx,sy);
+        });
+        ctx.strokeStyle='rgba(255,250,220,'+(0.2-sub*0.04)+')';
+        ctx.lineWidth=Math.max(0.3,0.5*(W/1280));
+        ctx.shadowBlur=0;ctx.stroke();
+      }
+    }
   }
-  ctx.strokeStyle=hsl(lineH,100,65);ctx.lineWidth=Math.max(2,3*(W/1280));
-  ctx.shadowColor=hsl(lineH,100,75);ctx.shadowBlur=16*(W/1280);ctx.lineJoin='round';ctx.stroke();
-  ctx.lineTo(W,H/2);ctx.lineTo(0,H/2);ctx.closePath();
-  ctx.fillStyle=ca(hsl(lineH,100,65),0.08);ctx.shadowBlur=0;ctx.fill();
+
+  // --- 날개 뿌리 글로우
+  var wg=ctx.createRadialGradient(ox,oy,0,ox,oy,Math.min(W,H)*(0.12+bass*0.06));
+  wg.addColorStop(0,'rgba(255,255,220,'+(0.9+bass*0.1)+')');
+  wg.addColorStop(0.3,'rgba(255,200,80,0.5)');
+  wg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=wg;ctx.shadowColor='#ffffc8';ctx.shadowBlur=50*(W/1280);
+  ctx.beginPath();ctx.arc(ox,oy,Math.min(W,H)*(0.12+bass*0.06),0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;ctx.restore();
+}
+
+// ── 6. SAKURA BLOOM ── 리본 위에 흐르는 벚꽃
+function drawSakura(ctx,W,H,data,T,t){
+  var cy=H/2;
+  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255,treble=avg(data,64,128)/255;
+  ctx.save();
+
+  var n=160;
+
+  // --- 메인 벚꽃 리본 웨이브 (3레이어)
+  for(var L=0;L<3;L++){
+    var lA=1-L*0.25,yShift=L*H*0.025;
+    var pts=[];
+    for(var i=0;i<=n;i++){
+      var x=(i/n)*W;
+      var v=data[Math.floor(i*data.length/n)]/255;
+      var wv=Math.sin(i/n*Math.PI*3-t*2.2+bass*7)*0.5+0.5;
+      var petal=Math.pow(Math.max(0,1-(i/n-0.5)*(i/n-0.5)*4),3)*wv;
+      var y=cy+yShift-(v*H*0.28+petal*H*0.12+bass*H*0.04);
+      pts.push([x,y]);
+    }
+
+    // 리본 채우기
+    ctx.beginPath();
+    pts.forEach(function(p,i){i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);});
+    ctx.lineTo(W,cy+yShift);ctx.lineTo(0,cy+yShift);ctx.closePath();
+    var pinkMix=mid;
+    var pr=Math.round(255*(1-pinkMix)+200*pinkMix);
+    var pg=Math.round(100*(1-pinkMix)+220*pinkMix);
+    var pb=Math.round(160*(1-pinkMix)+255*pinkMix);
+    var fillGr=ctx.createLinearGradient(0,cy-H*0.3,0,cy);
+    fillGr.addColorStop(0,'rgba('+pr+','+pg+','+pb+','+(lA*0.06)+')');
+    fillGr.addColorStop(0.6,'rgba('+pr+','+pg+','+pb+','+(lA*0.25)+')');
+    fillGr.addColorStop(1,'rgba(255,150,200,0.02)');
+    ctx.fillStyle=fillGr;ctx.fill();
+
+    // 리본 라인
+    ctx.beginPath();
+    pts.forEach(function(p,i){i===0?ctx.moveTo(p[0],p[1]):ctx.lineTo(p[0],p[1]);});
+    var lineHue=(340+L*20)%360;
+    ctx.strokeStyle='hsl('+lineHue+',85%,78%)';
+    ctx.lineWidth=Math.max(1,(2.5-L*0.6)*(W/1280));
+    ctx.shadowColor='hsl('+lineHue+',100%,85%)';ctx.shadowBlur=(16-L*4)*(W/1280);
+    ctx.lineJoin='round';ctx.globalAlpha=lA;ctx.stroke();ctx.shadowBlur=0;
+
+    // 하단 미러 리본
+    ctx.beginPath();
+    pts.forEach(function(p,i){
+      var y2=cy+yShift+(p[1]-(cy+yShift))*-0.45;
+      i===0?ctx.moveTo(p[0],y2):ctx.lineTo(p[0],y2);
+    });
+    ctx.strokeStyle='hsl('+((lineHue+30)%360)+',80%,75%)';
+    ctx.lineWidth=Math.max(0.5,(1.5-L*0.4)*(W/1280));
+    ctx.shadowColor='hsl('+((lineHue+30)%360)+',100%,80%)';ctx.shadowBlur=(10-L*3)*(W/1280);
+    ctx.globalAlpha=lA*0.5;ctx.stroke();ctx.shadowBlur=0;
+    ctx.globalAlpha=1;
+  }
+
+  // --- 떠다니는 꽃잎 (파형 위에 얹힘)
+  var petalCount=40;
+  for(var p=0;p<petalCount;p++){
+    var px=((p/petalCount)*W+t*W*(0.015+p*0.0003))%W;
+    var baseV=data[Math.floor((p/petalCount)*data.length)]/255;
+    var pyBase=cy-(baseV*H*0.28)+Math.sin(t*1.2+p*0.8)*H*0.04;
+    var floatY=pyBase-Math.abs(Math.sin(t*0.6+p*1.1))*H*0.12-p%3*H*0.03;
+    var ps=Math.max(2,(2.5+baseV*5)*(W/1280));
+    var alpha=0.6+baseV*0.35;
+    // 꽃잎 모양 (작은 타원형)
+    var petHue=(330+p*8)%360;
+    var petGr=ctx.createRadialGradient(px,floatY,0,px,floatY,ps*2.5);
+    petGr.addColorStop(0,'hsla('+petHue+',80%,92%,'+alpha+')');
+    petGr.addColorStop(0.5,'hsla('+petHue+',90%,78%,'+(alpha*0.7)+')');
+    petGr.addColorStop(1,'hsla('+petHue+',80%,70%,0)');
+    ctx.fillStyle=petGr;
+    ctx.shadowColor='rgba(255,180,210,0.6)';ctx.shadowBlur=ps*(W/1280)*1.5;
+    ctx.save();ctx.translate(px,floatY);ctx.rotate(t*0.3+p*0.5);
+    ctx.beginPath();ctx.ellipse(0,0,ps*2,ps*1.2,0,0,Math.PI*2);
+    ctx.fillStyle=petGr;ctx.fill();ctx.restore();ctx.shadowBlur=0;
+  }
+
+  // 중심 글로우
+  var sg=ctx.createRadialGradient(W/2,cy,0,W/2,cy,W*0.15+bass*W*0.05);
+  sg.addColorStop(0,'rgba(255,200,230,'+(0.3+bass*0.25)+')');
+  sg.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sg;ctx.beginPath();ctx.arc(W/2,cy,W*0.15+bass*W*0.05,0,Math.PI*2);ctx.fill();
   ctx.restore();
 }
+
 
 function drawCorner(ctx,W,H,data,T,t){
   var size=Math.min(W,H)*0.18;
@@ -623,20 +1189,18 @@ function drawCorner(ctx,W,H,data,T,t){
   var bg=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*1.8);
   bg.addColorStop(0,'rgba(0,0,0,0.7)');bg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=bg;ctx.beginPath();ctx.arc(cx,cy,baseR*1.8,0,Math.PI*2);ctx.fill();
-  // 링 3개
   for(var r=0;r<3;r++){
     var ringR=baseR*(1.52+r*0.22),hue=(t*60+r*120)%360;
     ctx.beginPath();ctx.arc(cx,cy,ringR,0,Math.PI*2);
-    ctx.strokeStyle=hsl(hue,100,75);ctx.lineWidth=Math.max(1,2-r*0.4);
-    ctx.shadowColor=hsl(hue,100,80);ctx.shadowBlur=10;
+    ctx.strokeStyle='hsl('+hue+',100%,75%)';ctx.lineWidth=Math.max(1,2-r*0.4);
+    ctx.shadowColor='hsl('+hue+',100%,80%)';ctx.shadowBlur=10;
     ctx.globalAlpha=0.75-r*0.12;ctx.stroke();ctx.shadowBlur=0;
   }
   ctx.globalAlpha=1;
-  // 내부 스파이크
   for(var i=0;i<n;i++){
     var ang=(i/n)*Math.PI*2-Math.PI/2;
     var v=data[Math.floor(i*data.length/n)]/255;
-    var col=hsl((hMain+(i/n)*160)%360,100,60+v*30);
+    var col='hsl('+((hMain+(i/n)*160)%360)+',100%,'+(60+v*30)+'%)';
     ctx.beginPath();
     ctx.moveTo(cx+Math.cos(ang)*baseR*0.82,cy+Math.sin(ang)*baseR*0.82);
     ctx.lineTo(cx+Math.cos(ang)*(baseR*0.82-v*baseR*0.85),cy+Math.sin(ang)*(baseR*0.82-v*baseR*0.85));
@@ -644,11 +1208,10 @@ function drawCorner(ctx,W,H,data,T,t){
     ctx.shadowColor=col;ctx.shadowBlur=v*10;ctx.globalAlpha=0.6+v*0.4;ctx.stroke();
   }
   ctx.shadowBlur=0;ctx.globalAlpha=1;
-  // 외부 스파이크
   for(var j=0;j<n;j++){
     var ang2=(j/n)*Math.PI*2-Math.PI/2;
     var v2=data[Math.floor(j*data.length/n)]/255;
-    var col2=hsl((hMain+30+(j/n)*200)%360,100,55+v2*35);
+    var col2='hsl('+((hMain+30+(j/n)*200)%360)+',100%,'+(55+v2*35)+'%)';
     ctx.beginPath();
     ctx.moveTo(cx+Math.cos(ang2)*baseR*1.1,cy+Math.sin(ang2)*baseR*1.1);
     ctx.lineTo(cx+Math.cos(ang2)*(baseR*1.1+v2*baseR*0.65),cy+Math.sin(ang2)*(baseR*1.1+v2*baseR*0.65));
@@ -656,67 +1219,16 @@ function drawCorner(ctx,W,H,data,T,t){
     ctx.shadowColor=col2;ctx.shadowBlur=v2*12;ctx.globalAlpha=0.6+v2*0.35;ctx.stroke();
   }
   ctx.shadowBlur=0;ctx.globalAlpha=1;
-  // 코어 글로우
   var cg=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*0.32*(0.9+energy*0.25));
-  cg.addColorStop(0,T.glow+'0.6)');cg.addColorStop(1,T.glow+'0)');
+  cg.addColorStop(0,'rgba(255,255,255,'+(0.5+energy*0.4)+')');
+  cg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=cg;ctx.beginPath();ctx.arc(cx,cy,baseR*0.32*(0.9+energy*0.25),0,Math.PI*2);ctx.fill();
   ctx.restore();
 }
 
-function drawHeart(ctx,W,H,data,T,t){
-  var cx=W/2,cy=H/2;
-  var bass=avg(data,0,8)/255,mid=avg(data,8,64)/255;
-  var energy=bass*0.6+mid*0.3;
-  var hMain=(t*45)%360;
-  ctx.save();
-  var heartSize=Math.min(W,H)*0.22*(1+energy*0.08);
-  var configs=[{sc:1.0,ho:0,al:0.85,lw:3.5},{sc:0.82,ho:30,al:0.6,lw:2.5},{sc:0.62,ho:60,al:0.4,lw:1.5}];
-  for(var ci=0;ci<configs.length;ci++){
-    var cfg=configs[ci];
-    var col=hsl((hMain+cfg.ho)%360,100,70);
-    ctx.beginPath();
-    for(var i=0;i<=360;i++){
-      var a=(i/360)*Math.PI*2,s=Math.sin(a),s3=s*s*s,c=Math.cos(a),sz=heartSize*cfg.sc;
-      var px=cx+16*s3*(sz/18);
-      var py=cy-(13*c-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a))*(sz/18);
-      if(i===0)ctx.moveTo(px,py);else ctx.lineTo(px,py);
-    }
-    ctx.closePath();ctx.strokeStyle=col;ctx.lineWidth=cfg.lw*(W/1280);
-    ctx.shadowColor=col;ctx.shadowBlur=20*(W/1280);ctx.globalAlpha=cfg.al;ctx.stroke();ctx.shadowBlur=0;
-  }
-  ctx.globalAlpha=1;
-  ctx.beginPath();
-  for(var i=0;i<=360;i++){
-    var a2=(i/360)*Math.PI*2,s2=Math.sin(a2),s32=s2*s2*s2,c2=Math.cos(a2),sz2=heartSize*0.6;
-    var px2=cx+16*s32*(sz2/18);
-    var py2=cy-(13*c2-5*Math.cos(2*a2)-2*Math.cos(3*a2)-Math.cos(4*a2))*(sz2/18);
-    if(i===0)ctx.moveTo(px2,py2);else ctx.lineTo(px2,py2);
-  }
-  ctx.closePath();
-  var hf=ctx.createRadialGradient(cx,cy-heartSize*0.05,0,cx,cy,heartSize*0.55);
-  hf.addColorStop(0,hsl(hMain,80,80)+'cc');
-  hf.addColorStop(0.5,hsl((hMain+30)%360,100,60)+'66');
-  hf.addColorStop(1,hsl((hMain+60)%360,100,50)+'11');
-  ctx.fillStyle=hf;ctx.globalAlpha=0.45+energy*0.2;ctx.fill();ctx.globalAlpha=1;
-  var n=data.length;
-  for(var i=0;i<n;i++){
-    var ang=(i/n)*Math.PI*2,v=data[i]/255;
-    var hx=16*Math.pow(Math.sin(ang),3);
-    var hy=13*Math.cos(ang)-5*Math.cos(2*ang)-2*Math.cos(3*ang)-Math.cos(4*ang);
-    var scale2=heartSize/18;
-    var x1=cx+hx*scale2,y1=cy-hy*scale2;
-    var x2=cx+(hx*scale2)*(1+v*0.4),y2=cy-(hy*scale2)*(1+v*0.4);
-    var vc=hsl((hMain+i*(360/n))%360,100,60+v*30);
-    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);
-    ctx.strokeStyle=vc;ctx.lineWidth=Math.max(1,1.5*(W/1280));
-    ctx.shadowColor=vc;ctx.shadowBlur=v*10*(W/1280);ctx.globalAlpha=0.5+v*0.4;ctx.stroke();
-  }
-  ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.restore();
-}
-
 function drawText(ctx,W,H,title,artist,T,style){
   if(!title&&!artist)return;
-  var isCircle=(style==='circle'||style==='heart');
+  var isCircle=(style==='lotus'||style==='crystal'||style==='heartbeat'||style==='sakura');
   var isCorner=(style==='corner');
   var textX=W/2;
   var titleY=isCircle?H*0.82:isCorner?H*0.82:H*0.18;
