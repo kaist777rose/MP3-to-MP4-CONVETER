@@ -896,8 +896,39 @@ btnConvert.addEventListener('click',function(){
       if(outUrl)URL.revokeObjectURL(outUrl);
       outUrl=URL.createObjectURL(blob);
       var n=(fname.value.trim()||'output').replace(/\.(mp4|webm)$/i,'')+'.'+ext;
-      btnDl.href=outUrl;btnDl.download=n;
-      btnDl.textContent='⬇  DOWNLOAD  '+n.toUpperCase();
+
+      // iOS Safari: navigator.share() → 사진 라이브러리 / 파일 저장 선택 가능
+      var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
+      var canShare=isIOS&&navigator.share&&navigator.canShare;
+
+      if(canShare){
+        // iOS: 버튼 클릭 시 share sheet 띄우기
+        btnDl.removeAttribute('href');btnDl.removeAttribute('download');
+        btnDl.textContent='⬇  저장 / 라이브러리 선택';
+        btnDl.onclick=function(e){
+          e.preventDefault();
+          var shareFile=new File([blob],n,{type:blob.type});
+          if(navigator.canShare({files:[shareFile]})){
+            navigator.share({files:[shareFile],title:n})
+              .catch(function(err){
+                // share 취소 또는 실패 시 일반 다운로드로 fallback
+                if(err.name!=='AbortError'){
+                  btnDl.href=outUrl;btnDl.download=n;
+                  btnDl.onclick=null;
+                  btnDl.click();
+                }
+              });
+          } else {
+            // canShare false면 일반 방식
+            btnDl.href=outUrl;btnDl.download=n;btnDl.onclick=null;btnDl.click();
+          }
+        };
+      } else {
+        // PC / Android: 기존 방식
+        btnDl.href=outUrl;btnDl.download=n;
+        btnDl.onclick=null;
+        btnDl.textContent='⬇  DOWNLOAD  '+n.toUpperCase();
+      }
       btnDl.classList.add('show');
       ac.close();
     });
@@ -917,7 +948,7 @@ btnReset.addEventListener('click',function(){
   logoPreview.classList.remove('show');logoPosRow.style.display='none';
   logoClearBtn.style.display='none';logoThumb.src='';
   progWrap.classList.remove('show');progBar.style.width='0%';progBar.className='prog-bar';
-  btnDl.classList.remove('show');previewWrap.classList.remove('show');
+  btnDl.classList.remove('show');btnDl.onclick=null;previewWrap.classList.remove('show');
   fname.value='output';fmtNote.textContent='';songTitle.value='';
   songArtist.value='DJ LIBRA MONKEY';
   lyricsEnabled.checked=false;lyricBody.classList.remove('show');lyricsText.value='';
