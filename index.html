@@ -227,7 +227,7 @@ input[type=range]{width:100%;margin-top:6px;accent-color:#8b5e1a;}
       <span class="s-lbl">파형 스타일</span>
       <div class="wave-styles">
         <div class="ws sel" data-style="bars">🎵 막대</div>
-        <div class="ws" data-style="wave">🌊 웨이브</div>
+        <div class="ws" data-style="heartbeat">💗 하트</div>
         <div class="ws" data-style="circle">⭕ 원형</div>
         <div class="ws" data-style="corner">◱ 코너</div>
       </div>
@@ -514,134 +514,137 @@ function drawBars(ctx,W,H,data,T,t){
   ctx.shadowBlur=0;ctx.globalAlpha=1;ctx.restore();
 }
 
-// ── WAVE ── 굵은 컬러 리본 웨이브 (2행 1번 스타일)
-function drawWave(ctx,W,H,data,T,t){
-  var bass=avg(data,0,8)/255, mid=avg(data,8,64)/255, treble=avg(data,64,128)/255;
-  var cy=H/2;
+// ── HEARTBEAT ── 실제 하트 모양 맥박
+function drawHeartbeat(ctx,W,H,data,T,t){
+  var cx=W/2, cy=H/2;
+  var bass=avg(data,0,8)/255, mid=avg(data,8,64)/255;
+  var pulse=1.0+bass*0.22+Math.sin(t*2.2)*0.08;
   ctx.save();
 
-  var layers=[
-    {amp:0.30, phase:0,   thick:9,  hueA:340, hueB:20,  alpha:0.95},
-    {amp:0.24, phase:0.9, thick:7,  hueA:20,  hueB:60,  alpha:0.88},
-    {amp:0.18, phase:1.8, thick:5.5,hueA:60,  hueB:190, alpha:0.80},
-    {amp:0.13, phase:2.7, thick:4,  hueA:190, hueB:270, alpha:0.72},
-    {amp:0.09, phase:3.6, thick:3,  hueA:270, hueB:340, alpha:0.62},
-    {amp:0.06, phase:4.5, thick:2,  hueA:160, hueB:210, alpha:0.50},
-  ];
-
-  var n=180;
-  layers.forEach(function(L, li){
-    // 점 계산
+  // 하트 경로 생성 함수 (파라메트릭)
+  function makeHeart(scale){
     var pts=[];
-    for(var i=0;i<=n;i++){
-      var prog=i/n;
-      var v=data[Math.floor(prog*data.length)]/255;
-      var wave=Math.sin(prog*Math.PI*5-t*2.0+L.phase+bass*6)*L.amp;
-      var y=cy + H*wave + (v-0.5)*H*0.28*(1+bass*0.35);
-      pts.push([prog*W, y]);
+    for(var i=0;i<=200;i++){
+      var a=(i/200)*Math.PI*2;
+      // 하트 파라메트릭: x=16sin³θ, y=13cosθ-5cos2θ-2cos3θ-cos4θ
+      var hx=16*Math.pow(Math.sin(a),3);
+      var hy=-(13*Math.cos(a)-5*Math.cos(2*a)-2*Math.cos(3*a)-Math.cos(4*a));
+      pts.push([cx + hx*scale, cy + hy*scale]);
     }
+    return pts;
+  }
 
-    // 선 전체를 하나의 경로로 그리기 (그라디언트)
-    var gr=ctx.createLinearGradient(0,0,W,0);
-    gr.addColorStop(0,   'hsl('+L.hueA+',100%,65%)');
-    gr.addColorStop(0.35,'hsl('+((L.hueA+L.hueB)/2)+',100%,72%)');
-    gr.addColorStop(0.65,'hsl('+((L.hueA+L.hueB)/2)+',100%,72%)');
-    gr.addColorStop(1,   'hsl('+L.hueB+',100%,65%)');
+  // 하트 6겹 (바깥→안으로, 음악 반응)
+  var layers=8;
+  for(var L=0;L<layers;L++){
+    var li=L/layers;
+    var v=data[Math.floor(li*data.length)]/255;
+    var scale=Math.min(W,H)*(0.016+li*0.022)*pulse*(1+v*0.08);
+    var pts=makeHeart(scale);
 
     ctx.beginPath();
     ctx.moveTo(pts[0][0], pts[0][1]);
-    for(var i=1;i<pts.length;i++){
-      // 부드러운 곡선
-      var mx=(pts[i-1][0]+pts[i][0])/2;
-      var my=(pts[i-1][1]+pts[i][1])/2;
-      ctx.quadraticCurveTo(pts[i-1][0],pts[i-1][1],mx,my);
-    }
-    ctx.lineTo(pts[pts.length-1][0], pts[pts.length-1][1]);
+    for(var i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.closePath();
 
-    ctx.strokeStyle=gr;
-    ctx.lineWidth=L.thick*(W/1280);
-    ctx.lineJoin='round'; ctx.lineCap='round';
-    ctx.shadowColor='hsl('+L.hueA+',100%,75%)';
-    ctx.shadowBlur=(18+bass*25-li*2)*(W/1280);
-    ctx.globalAlpha=L.alpha*(0.65+bass*0.35);
+    // 로즈↔마젠타↔시안 그라디언트
+    var hue=(340 - li*100 + t*15)%360;
+    var bright=60+v*35;
+    ctx.strokeStyle='hsl('+hue+',100%,'+bright+'%)';
+    ctx.lineWidth=Math.max(2.5,(5.5-L*0.55)*(W/1280));
+    ctx.shadowColor='hsl('+hue+',100%,'+(bright+15)+'%)';
+    ctx.shadowBlur=(28-L*2.5)*(0.4+v*0.8)*(W/1280);
+    ctx.globalAlpha=0.85-li*0.45;
     ctx.stroke();
-
-    // 동일 경로 한번 더 (더 밝게, 얇게) — 하이라이트
-    ctx.lineWidth=L.thick*0.35*(W/1280);
-    ctx.strokeStyle='rgba(255,255,255,'+(0.25+bass*0.15)+')';
     ctx.shadowBlur=0;
-    ctx.globalAlpha=L.alpha*0.55;
-    ctx.stroke();
-  });
+  }
+  ctx.globalAlpha=1;
 
-  ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.restore();
+  // 중심 코어 글로우
+  var coreScale=Math.min(W,H)*0.016*pulse*(1+bass*0.3);
+  var pts2=makeHeart(coreScale);
+  ctx.beginPath();
+  ctx.moveTo(pts2[0][0], pts2[0][1]);
+  for(var i=1;i<pts2.length;i++) ctx.lineTo(pts2[i][0], pts2[i][1]);
+  ctx.closePath();
+  var hgr=ctx.createRadialGradient(cx,cy-coreScale*0.1,0,cx,cy,coreScale*1.5);
+  hgr.addColorStop(0,'rgba(255,200,220,'+(0.95+bass*0.05)+')');
+  hgr.addColorStop(0.4,'rgba(255,60,130,0.7)');
+  hgr.addColorStop(1,'rgba(180,0,80,0.1)');
+  ctx.fillStyle=hgr;
+  ctx.shadowColor='#ff3388'; ctx.shadowBlur=55*(W/1280);
+  ctx.fill(); ctx.shadowBlur=0;
+  ctx.restore();
 }
 
-// ── CIRCLE ── 원형 서클 (두껍고 선명하게)
+// ── CIRCLE ── 원형 굵은 스파이크
 function drawCircleViz(ctx,W,H,data,T,t){
-  var cx=W/2, cy=H/2, baseR=Math.min(W,H)*0.28;
+  var cx=W/2, cy=H/2, baseR=Math.min(W,H)*0.26;
   var n=data.length;
-  var bass=avg(data,0,8)/255, mid=avg(data,8,64)/255;
+  var bass=avg(data,0,8)/255;
   var hMain=(t*40)%360;
   ctx.save();
 
   // 외부 고정 링 3개
   for(var r=0;r<3;r++){
-    var ringR=baseR*(1.48+r*0.22);
-    var hue=(t*55+r*110)%360;
+    var ringR=baseR*(1.55+r*0.24);
+    var hue=(t*55+r*120)%360;
     ctx.beginPath(); ctx.arc(cx,cy,ringR,0,Math.PI*2);
     ctx.strokeStyle='hsl('+hue+',100%,72%)';
-    ctx.lineWidth=Math.max(2, (3.5-r*0.8)*(W/1280));
-    ctx.shadowColor='hsl('+hue+',100%,82%)';
-    ctx.shadowBlur=18*(W/1280);
-    ctx.globalAlpha=0.75-r*0.15;
+    ctx.lineWidth=(5-r)*(W/1280);
+    ctx.shadowColor='hsl('+hue+',100%,85%)';
+    ctx.shadowBlur=25*(W/1280);
+    ctx.globalAlpha=0.9-r*0.15;
     ctx.stroke(); ctx.shadowBlur=0;
   }
   ctx.globalAlpha=1;
 
-  // 내부 스파이크 (안→밖) — 두껍게
+  // 내부 스파이크 — 선 매우 두껍게
+  var lw = 4.5*(W/1280);
   for(var i=0;i<n;i++){
-    var ang=(i/n)*Math.PI*2-Math.PI/2;
+    var ang=(i/n)*Math.PI*2 - Math.PI/2;
     var v=data[i]/255;
-    var hue=((hMain+(i/n)*180)%360);
-    var bright=62+v*30;
+    if(v<0.02) continue;
+    var hue=((hMain+(i/n)*200)%360);
+    var bright=65+v*28;
     ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(ang)*baseR*0.85, cy+Math.sin(ang)*baseR*0.85);
-    ctx.lineTo(cx+Math.cos(ang)*(baseR*0.85+v*baseR*1.0), cy+Math.sin(ang)*(baseR*0.85+v*baseR*1.0));
+    ctx.moveTo(cx+Math.cos(ang)*baseR*0.82, cy+Math.sin(ang)*baseR*0.82);
+    ctx.lineTo(cx+Math.cos(ang)*(baseR*0.82+v*baseR*1.1), cy+Math.sin(ang)*(baseR*0.82+v*baseR*1.1));
     ctx.strokeStyle='hsl('+hue+',100%,'+bright+'%)';
-    ctx.lineWidth=Math.max(1.8, (3.5*(W/1280))*(0.5+v*0.8));
-    ctx.shadowColor='hsl('+hue+',100%,'+(bright+12)+'%)';
-    ctx.shadowBlur=(v*22+4)*(W/1280);
-    ctx.globalAlpha=0.6+v*0.4;
+    ctx.lineWidth=Math.max(2.5, lw*(0.5+v*0.8));
+    ctx.shadowColor='hsl('+hue+',100%,'+(bright+18)+'%)';
+    ctx.shadowBlur=(v*30+8)*(W/1280);
+    ctx.globalAlpha=0.7+v*0.3;
     ctx.stroke();
   }
   ctx.shadowBlur=0; ctx.globalAlpha=1;
 
-  // 외부 스파이크 (짝수)
+  // 외부 스파이크
   for(var j=0;j<n;j+=2){
-    var ang2=(j/n)*Math.PI*2-Math.PI/2;
+    var ang2=(j/n)*Math.PI*2 - Math.PI/2;
     var v2=data[j]/255;
-    var hue2=((hMain+60+(j/n)*220)%360);
+    if(v2<0.03) continue;
+    var hue2=((hMain+80+(j/n)*220)%360);
     ctx.beginPath();
-    ctx.moveTo(cx+Math.cos(ang2)*baseR*1.48, cy+Math.sin(ang2)*baseR*1.48);
-    ctx.lineTo(cx+Math.cos(ang2)*(baseR*1.48+v2*baseR*0.6), cy+Math.sin(ang2)*(baseR*1.48+v2*baseR*0.6));
-    ctx.strokeStyle='hsl('+hue2+',100%,'+(55+v2*35)+'%)';
-    ctx.lineWidth=Math.max(1.5, (2.8*(W/1280))*(0.4+v2*0.8));
-    ctx.shadowColor='hsl('+hue2+',100%,75%)';
-    ctx.shadowBlur=(v2*18+3)*(W/1280);
-    ctx.globalAlpha=0.55+v2*0.4;
+    ctx.moveTo(cx+Math.cos(ang2)*baseR*1.55, cy+Math.sin(ang2)*baseR*1.55);
+    ctx.lineTo(cx+Math.cos(ang2)*(baseR*1.55+v2*baseR*0.65), cy+Math.sin(ang2)*(baseR*1.55+v2*baseR*0.65));
+    ctx.strokeStyle='hsl('+hue2+',100%,'+(60+v2*32)+'%)';
+    ctx.lineWidth=Math.max(2.0, (4.0*(W/1280))*(0.4+v2*0.8));
+    ctx.shadowColor='hsl('+hue2+',100%,78%)';
+    ctx.shadowBlur=(v2*24+6)*(W/1280);
+    ctx.globalAlpha=0.65+v2*0.35;
     ctx.stroke();
   }
   ctx.shadowBlur=0; ctx.globalAlpha=1;
 
-  // 코어 글로우
-  var cg=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*0.32*(0.9+bass*0.25));
-  cg.addColorStop(0,'rgba(255,255,255,'+(0.65+bass*0.3)+')');
-  cg.addColorStop(0.4,'rgba(180,220,255,'+(0.4+bass*0.2)+')');
+  // 중심 코어
+  var cg=ctx.createRadialGradient(cx,cy,0,cx,cy,baseR*0.28*(1+bass*0.3));
+  cg.addColorStop(0,'rgba(255,255,255,'+(0.85+bass*0.15)+')');
+  cg.addColorStop(0.35,'rgba(150,200,255,0.55)');
   cg.addColorStop(1,'rgba(0,0,0,0)');
   ctx.fillStyle=cg;
-  ctx.shadowColor='#aaddff'; ctx.shadowBlur=40*(W/1280);
-  ctx.beginPath(); ctx.arc(cx,cy,baseR*0.32*(0.9+bass*0.25),0,Math.PI*2); ctx.fill();
+  ctx.shadowColor='#cceeff'; ctx.shadowBlur=50*(W/1280);
+  ctx.beginPath();ctx.arc(cx,cy,baseR*0.28*(1+bass*0.3),0,Math.PI*2);ctx.fill();
   ctx.shadowBlur=0; ctx.restore();
 }
 
@@ -733,7 +736,7 @@ function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,log
   ctx.fillStyle=vig;ctx.fillRect(0,0,W,H);
 
   if(style==='bars')drawBars(ctx,W,H,data,T,t);
-  else if(style==='wave')drawWave(ctx,W,H,data,T,t);
+  else if(style==='heartbeat')drawHeartbeat(ctx,W,H,data,T,t);
   else if(style==='circle')drawCircleViz(ctx,W,H,data,T,t);
   else if(style==='corner')drawCorner(ctx,W,H,data,T,t);
 
@@ -745,7 +748,7 @@ function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,log
 
 function drawText(ctx,W,H,title,artist,T,style){
   if(!title&&!artist)return;
-  var isCircle=(style==='circle');
+  var isCircle=(style==='heartbeat'||style==='circle');
   var isCorner=(style==='corner');
   var textX=W/2;
   var titleY=isCircle?H*0.82:isCorner?H*0.82:H*0.18;
