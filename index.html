@@ -948,31 +948,27 @@ btnConvert.addEventListener('click',function(){
       outUrl=URL.createObjectURL(blob);
       var n=(fname.value.trim()||'output').replace(/\.(mp4|webm)$/i,'')+'.'+ext;
 
-      // iOS Safari: navigator.share() → 사진 라이브러리 / 파일 저장 선택 가능
-      var isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)&&!window.MSStream;
-      var canShare=isIOS&&navigator.share&&navigator.canShare;
+      // iOS/iPadOS 감지 — 신형 iPad는 UA에 "iPad"가 없어서 터치 여부로 보완
+      var ua=navigator.userAgent;
+      var isIOS=/iPad|iPhone|iPod/.test(ua)||
+                (/Macintosh/.test(ua)&&'ontouchend' in document);
+      var hasShare=typeof navigator.share==='function';
 
-      if(canShare){
-        // iOS: 버튼 클릭 시 share sheet 띄우기
+      if(isIOS&&hasShare){
         btnDl.removeAttribute('href');btnDl.removeAttribute('download');
         btnDl.textContent='⬇  저장 / 라이브러리 선택';
         btnDl.onclick=function(e){
           e.preventDefault();
           var shareFile=new File([blob],n,{type:blob.type});
-          if(navigator.canShare({files:[shareFile]})){
-            navigator.share({files:[shareFile],title:n})
-              .catch(function(err){
-                // share 취소 또는 실패 시 일반 다운로드로 fallback
-                if(err.name!=='AbortError'){
-                  btnDl.href=outUrl;btnDl.download=n;
-                  btnDl.onclick=null;
-                  btnDl.click();
-                }
-              });
-          } else {
-            // canShare false면 일반 방식
-            btnDl.href=outUrl;btnDl.download=n;btnDl.onclick=null;btnDl.click();
-          }
+          // canShare 사전 체크 없이 바로 share 시도 → 시트에 사진/파일/드라이브 모두 표시
+          navigator.share({files:[shareFile],title:n})
+            .catch(function(err){
+              if(err.name!=='AbortError'){
+                // share 실패시만 일반 다운로드 fallback
+                var a=document.createElement('a');
+                a.href=outUrl;a.download=n;a.click();
+              }
+            });
         };
       } else {
         // PC / Android: 기존 방식
