@@ -157,6 +157,25 @@ input[type=range]{width:100%;margin-top:6px;accent-color:#8b5e1a;}
 </div>
 
 <div class="card">
+  <div class="card-label">배경 동영상 <span class="badge">OPTIONAL</span></div>
+  <div class="drop" id="bgVidZone">
+    <span class="drop-ico">🎬</span>
+    <span class="drop-sub">MP4 · MOV · WEBM (6~10초 루프) — 클릭 또는 드래그</span>
+    <span class="drop-name" id="bgVidName"></span>
+    <input type="file" id="bgVidInput" accept="video/*">
+  </div>
+  <div id="bgVidThumbWrap" style="display:none;margin-top:12px;">
+    <video id="bgVidPreview" style="width:100%;max-height:80px;object-fit:cover;border:1px solid #ddd5c0;border-radius:3px;opacity:.8;" muted loop playsinline></video>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;">
+      <span class="s-lbl" style="margin:0;">동영상 어둡기</span>
+      <span style="font-size:11px;color:#8b5e1a;font-weight:800;" id="vidDimVal">65%</span>
+    </div>
+    <input type="range" id="vidDimSlider" min="0" max="95" value="65">
+    <button id="bgVidClearBtn" style="margin-top:10px;width:100%;background:transparent;border:1px solid #c8bda0;color:#8a7050;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:3px;padding:7px;cursor:pointer;border-radius:3px;text-transform:uppercase;">✕ 동영상 제거</button>
+  </div>
+</div>
+
+<div class="card">
   <div class="card-label">워터마크 / 로고 <span class="badge">OPTIONAL</span></div>
   <div class="drop" id="logoZone">
     <span class="drop-ico">💧</span>
@@ -284,7 +303,7 @@ input[type=range]{width:100%;margin-top:6px;accent-color:#8b5e1a;}
 <script>
 (function(){
 'use strict';
-var mp3File=null,outUrl=null,bgImg=null,logoImg=null;
+var mp3File=null,outUrl=null,bgImg=null,bgVid=null,logoImg=null;
 var waveStyle='bars',colorTheme='cyan',logoPos='br',gradHue=0;
 var THEMES={
   cyan:  {a:'#00e5ff',b:'#0066ff',glow:'rgba(0,229,255,',  text:'#00e5ff'},
@@ -389,6 +408,33 @@ bgClearBtn.addEventListener('click',function(){
   if(mp3File)drawStaticPreview();
 });
 
+// ── 배경 동영상 ──────────────────────────────────────
+var bgVidZone=$('bgVidZone'),bgVidInput=$('bgVidInput'),bgVidName=$('bgVidName');
+var bgVidThumbWrap=$('bgVidThumbWrap'),bgVidPreview=$('bgVidPreview');
+var vidDimSlider=$('vidDimSlider'),vidDimVal=$('vidDimVal'),bgVidClearBtn=$('bgVidClearBtn');
+
+function loadBgVid(f){
+  if(!f||!f.type.startsWith('video/'))return;
+  var url=URL.createObjectURL(f);
+  bgVidPreview.src=url;bgVidPreview.load();bgVidPreview.play();
+  bgVid=bgVidPreview;
+  bgVidName.textContent=f.name;bgVidZone.classList.add('active');
+  bgVidThumbWrap.style.display='block';
+  if(mp3File)drawStaticPreview();
+}
+bgVidZone.addEventListener('click',function(){bgVidInput.click();});
+bgVidInput.addEventListener('change',function(e){loadBgVid(e.target.files[0]);});
+bgVidZone.addEventListener('dragover',function(e){e.preventDefault();bgVidZone.classList.add('over');});
+bgVidZone.addEventListener('dragleave',function(){bgVidZone.classList.remove('over');});
+bgVidZone.addEventListener('drop',function(e){e.preventDefault();bgVidZone.classList.remove('over');loadBgVid(e.dataTransfer.files[0]);});
+vidDimSlider.addEventListener('input',function(){vidDimVal.textContent=vidDimSlider.value+'%';if(mp3File)drawStaticPreview();});
+bgVidClearBtn.addEventListener('click',function(){
+  bgVid=null;bgVidInput.value='';bgVidName.textContent='';
+  bgVidZone.classList.remove('active');bgVidThumbWrap.style.display='none';
+  bgVidPreview.src='';
+  if(mp3File)drawStaticPreview();
+});
+
 function loadLogo(f){
   if(!f)return;
   var ok=f.type.startsWith('image')||/\.(jpe?g|png|webp|gif|heic)$/i.test(f.name)||f.type==='';
@@ -447,7 +493,7 @@ function drawStaticPreview(){
   for(var i=0;i<256;i++)fake[i]=80+Math.sin(i*0.3)*60+Math.random()*40;
   var lyrics=lyricsEnabled.checked?lyricsText.value.split('\n').filter(function(l){return l.trim();}):[];
   drawFrame(ctx,W,H,fake,songTitle.value,songArtist.value,getBg(),colorTheme,
-    waveStyle,0,bgImg,parseInt(dimSlider.value),logoImg,+logoSize.value,logoPos,
+    waveStyle,0,bgImg||(bgVid&&bgVid.readyState>=2?bgVid:null),bgImg?parseInt(dimSlider.value):parseInt(vidDimSlider.value),logoImg,+logoSize.value,logoPos,
     lyrics,0,getLyricColor(),gradHue);
 }
 
@@ -722,7 +768,7 @@ function drawCorner(ctx,W,H,data,T,t){
 function drawFrame(ctx,W,H,data,title,artist,bg,theme,style,t,bgImage,dimPct,logo,logoSizePct,lpos,lyrics,elapsed,lyricColor,ghue){
   var T=THEMES[theme]||THEMES.cyan;
   if(bgImage){
-    var iw=bgImage.width||800,ih=bgImage.height||600;
+    var iw=bgImage.videoWidth||bgImage.width||800,ih=bgImage.videoHeight||bgImage.height||600;
     var scale=Math.max(W/iw,H/ih);
     ctx.drawImage(bgImage,(W-iw*scale)/2,(H-ih*scale)/2,iw*scale,ih*scale);
     ctx.fillStyle='rgba(0,0,0,'+(dimPct||65)/100+')';ctx.fillRect(0,0,W,H);
@@ -868,7 +914,8 @@ btnConvert.addEventListener('click',function(){
     var artist=songArtist.value.trim();
     var bg=clrText.value;
     var theme=colorTheme,style=waveStyle;
-    var snapBg=bgImg,snapDim=parseInt(dimSlider.value);
+    var snapBg=bgImg||(bgVid&&bgVid.readyState>=2?bgVid:null);
+    var snapDim=bgVid&&!bgImg?parseInt(vidDimSlider.value):parseInt(dimSlider.value);
     var snapLogo=logoImg,snapLogoSize=+logoSize.value,snapLogoPos=logoPos;
     var lyrics=lyricsEnabled.checked?lyricsText.value.split('\n').filter(function(l){return l.trim();}):[];
     var lyricColor=getLyricColor();
@@ -948,6 +995,8 @@ btnReset.addEventListener('click',function(){
   mp3File=null;mp3Input.value='';mp3NameEl.textContent='';mp3Zone.classList.remove('active','over');
   bgImg=null;bgImgInput.value='';bgImgName.textContent='';bgImgZone.classList.remove('active');
   bgThumbWrap.style.display='none';bgThumbImg.src='';
+  bgVid=null;bgVidInput.value='';bgVidName.textContent='';bgVidZone.classList.remove('active');
+  bgVidThumbWrap.style.display='none';bgVidPreview.src='';
   logoImg=null;logoInput.value='';logoName.textContent='';logoZone.classList.remove('active');
   logoPreview.classList.remove('show');logoPosRow.style.display='none';
   logoClearBtn.style.display='none';logoThumb.src='';
